@@ -1,101 +1,95 @@
-# Brightness Control – GNOME Shell Extension for Ubuntu
+# Brightness Control for Ubuntu 26.04, 25.10, 25.04 and 24.04 (GNOME Shell Extension)
 
-Software brightness control for external monitors on Ubuntu 25.04 and 25.10 with Wayland.
+Per-monitor brightness sliders for external monitors on Ubuntu with GNOME on Wayland.
+It works on **any monitor, including ones without DDC/CI support**: if the monitor can't be
+controlled over DDC/CI, the extension dims it with a software overlay instead.
 
-> **Full guide with screenshots:** [techstoriesindia.com – Brightness Control GNOME Extension for Ubuntu](https://techstoriesindia.com/?p=8677)
-
----
-
-## Why This Exists
-
-Ubuntu's switch to Wayland as the default display server broke brightness control for external monitors. These tools no longer work on Wayland:
-
-- `xrandr --brightness` — X11 only
-- `xgamma` — X11 only
-- Most legacy GNOME brightness extensions — depend on X11 APIs
-
-DDC/CI (hardware brightness via I2C bus) is supposed to work on Wayland but fails silently on most AMD and NVIDIA+AMD hybrid GPU setups due to a known AMD Display Core driver bug.
-
-This extension fixes it using a **software overlay** — a transparent layer positioned over the external monitor inside the GNOME compositor. No X11 needed. No root access needed.
+> **Full guide:** [Brightness Control for Ubuntu 26.04 / 24.04 on techstoriesindia.com](https://techstoriesindia.com/brightness-control-ubuntu-26-04-24-04-external-monitor-gnome-extension/)
 
 ---
+
+## What it does
+
+GNOME on Wayland has no built-in brightness control for external monitors, and the old
+X11 tricks (`xrandr --brightness`, `xgamma`) don't work on Wayland. This extension adds a
+brightness menu to the top panel with a slider for each connected monitor.
+
+It picks one of two methods per monitor:
+
+| Method | Badge | How it works | Needs |
+|--------|-------|--------------|-------|
+| **DDC/CI (hardware)** | `DDC` (green) | Sends VCP code 0x10 (brightness) to the monitor over I2C via `ddcutil`. Changes the real backlight. | Monitor with DDC/CI on, `ddcutil`, `i2c-dev` |
+| **Software overlay** | `SW` (orange) | Places a semi-transparent black layer over that monitor inside GNOME Shell. | Nothing |
+
+DDC is detected automatically when GNOME Shell starts and whenever a monitor is plugged in
+or removed. A monitor that doesn't answer DDC/CI (no DDC support, DDC turned off in the OSD,
+some docks/adapters, or GPU drivers where DDC fails such as many AMD and NVIDIA+AMD hybrid
+laptops) falls back to the software overlay with no setup.
 
 ## Features
 
-- Per-monitor sliders in the top panel — each external display gets its own control
-- Scroll on the panel icon to step brightness up/down
-- Quick preset buttons: 100%, 75%, 50%, 25%, 10%
-- Auto DDC/CI detection — switches to hardware brightness if your monitor supports it
-- **DDC** (green) / **SW** (orange) badge per monitor so you know which method is active
-- Sync mode — lock all monitors to the same brightness
-- Settings page for step size, preferred method, target connector
-
----
+- A slider per monitor in the top-panel menu
+- Scroll on the panel icon to step brightness up and down
+- Presets: 100%, 75%, 50%, 25% (Night), 10% (Dim)
+- `DDC` / `SW` badge so you can see which method each monitor uses
+- Sync mode: one slider for all monitors
+- Settings window: step size, preferred method (auto / overlay / ddc), show percentage
+- No root access needed for overlay mode
 
 ## Compatibility
 
-| Item | Supported |
-|------|-----------|
-| Ubuntu | 25.04, 25.10 |
-| GNOME Shell | 48, 49, 50 |
-| Display server | Wayland |
-| GPU | Any (including NVIDIA + AMD hybrid) |
-| Connections | HDMI, DisplayPort, USB-C |
+| Ubuntu | GNOME Shell | Status |
+|--------|-------------|--------|
+| 26.04 LTS | 50 | Tested (Wayland) |
+| 25.10 | 49 | Supported |
+| 25.04 | 48 | Supported |
+| 24.10 | 47 | Supported |
+| 24.04 LTS | 46 | Supported |
+| Other distros | 45 to 50 | Should work |
 
----
+Any GPU (Intel, AMD, NVIDIA, hybrid) and any connection (HDMI, DisplayPort, USB-C).
 
-## Installation
+## Install
 
-### Step 1 — Clone this repository
+### Option 1: release zip (recommended)
 
-```bash
-git clone https://github.com/incrediblemac/brightnesscontrollerubuntu.git
-```
+1. Download `brightness-control@incrediblemac.github.io.shell-extension.zip` from the
+   [latest release](https://github.com/incrediblemac/gnome-brightness-control/releases/latest).
+2. Install it:
+   ```bash
+   gnome-extensions install --force brightness-control@incrediblemac.github.io.shell-extension.zip
+   ```
+3. Log out and log back in (required on Wayland).
+4. Enable it:
+   ```bash
+   gnome-extensions enable brightness-control@incrediblemac.github.io
+   ```
+   Or switch it on in the **Extensions** app.
 
-### Step 2 — Copy the extension to your GNOME extensions folder
-
-```bash
-mkdir -p ~/.local/share/gnome-shell/extensions/
-cp -r gnome-brightness-control/brightness-control@incrediblemac.github.io ~/.local/share/gnome-shell/extensions/
-```
-
-### Step 3 — Compile the GSettings schema
-
-```bash
-glib-compile-schemas ~/.local/share/gnome-shell/extensions/brightness-control@incrediblemac.github.io/schemas/
-```
-
-### Step 4 — Log out and log back in
-
-On Wayland, GNOME Shell loads extensions at session start. A log out and log back in is required for the extension to appear in the list.
-
-### Step 5 — Enable the extension
+### Option 2: from source
 
 ```bash
-gnome-extensions enable brightness-control@incrediblemac.github.io
+git clone https://github.com/incrediblemac/gnome-brightness-control.git
+cd gnome-brightness-control
+gnome-extensions pack brightness-control@incrediblemac.github.io --force
+gnome-extensions install --force brightness-control@incrediblemac.github.io.shell-extension.zip
 ```
 
-Or open the **Extensions** app from the GNOME app grid and toggle **Brightness Control** on.
+Then log out, log back in, and enable it as above.
 
-The brightness icon will appear in your top panel immediately.
+## Optional: hardware brightness over DDC/CI
 
----
-
-## Optional: Enable DDC/CI Hardware Brightness
-
-If your monitor supports DDC/CI, install `ddcutil` to let the extension use hardware brightness control instead of the software overlay:
+Skip this if your monitor has no DDC/CI. The overlay works without it.
 
 ```bash
 sudo apt install ddcutil
 sudo modprobe i2c-dev
+echo i2c-dev | sudo tee /etc/modules-load.d/i2c-dev.conf
 sudo usermod -aG i2c $USER
 ```
 
-Log out and back in. The extension checks for DDC availability every 30 seconds — if it works on your setup, the badge next to that monitor's slider switches from **SW** to **DDC** automatically.
-
-> DDC/CI fails on many AMD and hybrid GPU setups. The software overlay will be used as fallback automatically — no action needed.
-
----
+Turn on DDC/CI in the monitor's on-screen menu, then log out and back in. If
+`ddcutil detect` lists your monitor, its badge switches from `SW` to `DDC`.
 
 ## Settings
 
@@ -103,64 +97,27 @@ Log out and back in. The extension checks for DDC availability every 30 seconds 
 gnome-extensions prefs brightness-control@incrediblemac.github.io
 ```
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `brightness-level` | Current brightness 0–100 | 100 |
-| `preferred-method` | auto / overlay / ddc | auto |
-| `step-size` | Scroll step size 1–25 | 5 |
-| `show-percentage` | Show % in panel | true |
-| `sync-all-monitors` | Same brightness on all monitors | false |
-| `target-monitor` | Connector name (e.g. HDMI-1) | HDMI-A-1 |
-
----
-
 ## Uninstall
 
 ```bash
-gnome-extensions disable brightness-control@incrediblemac.github.io
-rm -rf ~/.local/share/gnome-shell/extensions/brightness-control@incrediblemac.github.io
+gnome-extensions uninstall brightness-control@incrediblemac.github.io
 ```
 
-Log out and back in to complete removal.
+## Limitations
 
----
-
-## Known Limitations
-
-- **No power savings** — the software overlay dims visually but does not reduce actual backlight power. Only DDC/CI hardware mode reduces real backlight output.
-- **Internal display not affected** — targets external monitors only. The laptop's built-in display uses `brightnessctl` natively.
-- **Wayland only** — on X11, use `xrandr --brightness` instead.
-
----
+- The software overlay dims the picture but doesn't lower the backlight, so it saves no
+  power and blacks get darker along with everything else. Only DDC mode changes the backlight.
+- Tested on GNOME on Wayland.
+- Not published on extensions.gnome.org. Install from the releases page.
 
 ## Troubleshooting
 
-**Extension not showing after install:**
-Log out and back in. On Wayland this step is mandatory.
-
-**Overlay not appearing on monitor:**
-Check `journalctl -f /usr/bin/gnome-shell` for errors. Make sure the monitor is detected as non-primary.
-
-**DDC not working:**
-Expected on AMD + hybrid GPU setups. The software overlay handles it automatically. To diagnose:
-```bash
-ddcutil detect
-sudo ddcutil --bus 5 getvcp 10 --sleep-multiplier 3
-dmesg | grep -i i2c
-```
-
-**Extension crashes GNOME Shell:**
-Disable from a TTY (`Ctrl+Alt+F3`):
-```bash
-gnome-extensions disable brightness-control@incrediblemac.github.io
-```
-
----
+- **Not showing after install:** log out and back in.
+- **Errors:** `journalctl -b0 /usr/bin/gnome-shell | grep -i brightness`
+- **DDC not detected:** run `ddcutil detect`. If it fails, the overlay is used automatically.
+- **Shell problems:** from a TTY (`Ctrl+Alt+F3`) run
+  `gnome-extensions disable brightness-control@incrediblemac.github.io`
 
 ## License
 
-MIT
-
----
-
-> **Full installation guide and background:** [techstoriesindia.com – Brightness Control GNOME Extension for Ubuntu Wayland](https://techstoriesindia.com/?p=8677)
+GPL-2.0-or-later. See [LICENSE](LICENSE).
