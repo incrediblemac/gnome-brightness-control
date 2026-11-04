@@ -341,6 +341,52 @@ class BrightnessIndicator extends PanelMenu.Button {
         // Store detected monitors in settings
         const connectors = this._externalMonitors.map(m => m.connector);
         this._settings.set_string('detected-monitors', JSON.stringify(connectors));
+
+        this._mapConnectorsFromMutter();
+    }
+
+    // Ask Mutter which connector drives each logical monitor and match by
+    // position. The DRM-order guess above can label an external monitor as
+    // eDP-1 when the laptop panel is off or mirrored.
+    _mapConnectorsFromMutter() {
+        Gio.DBus.session.call(
+            'org.gnome.Mutter.DisplayConfig', '/org/gnome/Mutter/DisplayConfig',
+            'org.gnome.Mutter.DisplayConfig', 'GetCurrentState',
+            null, null, Gio.DBusCallFlags.NONE, -1, this._cancellable,
+            (conn, res) => {
+                let logical;
+                try {
+                    [, , logical] = conn.call_finish(res).deepUnpack();
+                } catch (e) {
+                    if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                        console.error(`Brightness Control: DisplayConfig query failed: ${e.message}`);
+                    return;
+                }
+
+                let changed = false;
+                for (const monitor of this._externalMonitors) {
+                    const lm = logical.find(l => l[0] === monitor.x && l[1] === monitor.y);
+                    if (!lm || lm[5].length === 0)
+                        continue;
+                    // Mirrored outputs share one logical monitor: prefer the external one
+                    const names = lm[5].map(m => m[0]);
+                    const connector = names.find(n => !n.startsWith('eDP') && !n.startsWith('LVDS')) ?? names[0];
+                    if (connector !== monitor.connector) {
+                        monitor.connector = connector;
+                        monitor.isExternal = !connector.startsWith('eDP') && !connector.startsWith('LVDS');
+                        monitor.displayName = this._getDisplayName(connector);
+                        changed = true;
+                    }
+                }
+
+                if (!changed)
+                    return;
+                this._settings.set_string('detected-monitors',
+                    JSON.stringify(this._externalMonitors.map(m => m.connector)));
+                this._createAllOverlays();
+                this._rebuildMenu();
+                this._applyAllBrightness();
+            });
     }
 
     _getDisplayName(connector) {
@@ -382,27 +428,31 @@ class BrightnessIndicator extends PanelMenu.Button {
             if (!p.get_successful() || !stdout)
                 return;
 
+            // `ddcutil detect --brief` lists DDC-capable monitors under
+            // "Display N" and everything else under "Invalid display".
+            let valid = false;
             let currentBus = null;
-            let currentConnector = null;
             for (const line of stdout.split('\n')) {
+                if (/^Display \d+/.test(line)) {
+                    valid = true;
+                    currentBus = null;
+                    continue;
+                }
+                if (/^\S/.test(line)) {
+                    valid = false;
+                    currentBus = null;
+                    continue;
+                }
+
                 const busMatch = line.match(/I2C bus:\s+\/dev\/i2c-(\d+)/);
                 if (busMatch)
                     currentBus = busMatch[1];
 
-                const connectorMatch = line.match(/DRM connector:\s+card\d+-(.+)/);
-                if (connectorMatch)
-                    currentConnector = connectorMatch[1];
-
-                // A valid display reports a VCP version
-                if (line.includes('VCP version') && currentBus && currentConnector) {
-                    const normalized = this._normalizeConnector(currentConnector);
+                const connectorMatch = line.match(/DRM[ _]connector:\s+card\d+-(\S+)/);
+                if (connectorMatch && valid && currentBus) {
+                    const normalized = this._normalizeConnector(connectorMatch[1]);
                     this._ddcBusMap[normalized] = currentBus;
                     this._ddcAvailableMap[normalized] = true;
-                }
-
-                if (line.match(/^Display \d+/) || line.match(/^Invalid display/)) {
-                    currentBus = null;
-                    currentConnector = null;
                 }
             }
 
@@ -791,7 +841,9 @@ class BrightnessIndicator extends PanelMenu.Button {
     }
 
     _openSettings() {
-        this._extension.openPreferences();
+        const result = this._extension.openPreferences();
+        result?.catch?.(e =>
+            console.error(`Brightness Control: could not open preferences: ${e.message}`));
     }
 
     destroy() {
