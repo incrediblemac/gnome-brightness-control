@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.brightness-control" path="/org/gnome/shell/extensions/brightness-control/">
+    <key name="brightness-level" type="i">
+      <default>100</default>
+      <summary>Global brightness level (legacy)</summary>
+      <description>Global brightness level as percentage (0-100)</description>
+    </key>
+
+    <key name="monitor-brightness" type="s">
+      <default>'{}'</default>
+      <summary>Per-monitor brightness levels</summary>
+      <description>JSON object mapping monitor connectors to brightness levels</description>
+    </key>
+
+    <key name="monitor-methods" type="s">
+      <default>'{}'</default>
+      <summary>Per-monitor brightness methods</summary>
+      <description>JSON object mapping monitor connectors to preferred methods (auto, overlay, ddc)</description>
+    </key>
+
+    <key name="monitor-ddc-bus" type="s">
+      <default>'{}'</default>
+      <summary>Per-monitor DDC bus mappings</summary>
+      <description>JSON object mapping monitor connectors to i2c bus numbers for DDC</description>
+    </key>
+
+    <key name="preferred-method" type="s">
+      <default>'auto'</default>
+      <summary>Default brightness method</summary>
+      <description>Default method to use for brightness control (auto, overlay, ddc)</description>
+    </key>
+
+    <key name="step-size" type="i">
+      <default>5</default>
+      <summary>Step size</summary>
+      <description>Percentage to adjust per step (1-25)</description>
+    </key>
+
+    <key name="show-percentage" type="b">
+      <default>true</default>
+      <summary>Show percentage in panel</summary>
+      <description>Whether to display the brightness percentage next to the icon</description>
+    </key>
+
+    <key name="target-monitor" type="s">
+      <default>'all-external'</default>
+      <summary>Target monitor selector</summary>
+      <description>Which monitors to control (all-external, specific connector)</description>
+    </key>
+
+    <key name="sync-all-monitors" type="b">
+      <default>false</default>
+      <summary>Sync all monitors</summary>
+      <description>When true, all external monitors share the same brightness level</description>
+    </key>
+
+    <key name="detected-monitors" type="s">
+      <default>'[]'</default>
+      <summary>Detected external monitors</summary>
+      <description>JSON array of detected external monitor connectors</description>
+    </key>
+  </schema>
+</schemalist>

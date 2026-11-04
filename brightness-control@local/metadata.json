@@ -1,0 +1,8 @@
+{
+  "name": "Brightness Control",
+  "description": "Multi-monitor software brightness control. Individual per-monitor control with DDC/CI hardware support and software overlay fallback for monitors without DDC.",
+  "uuid": "brightness-control@local",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "settings-schema": "org.gnome.shell.extensions.brightness-control",
+  "version": 6
+}

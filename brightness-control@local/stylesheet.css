@@ -1,0 +1,34 @@
+/* Brightness Control Extension Styles */
+
+/* Panel button */
+.brightness-control-panel {
+    padding: 0 4px;
+}
+
+/* Slider in menu */
+.brightness-slider {
+    height: 1em;
+    min-width: 200px;
+    margin: 0 12px;
+}
+
+/* Brightness label */
+.brightness-label {
+    font-weight: bold;
+}
+
+/* Method indicator */
+.method-indicator {
+    font-style: italic;
+    color: #888;
+}
+
+/* Menu styling */
+.brightness-menu-item {
+    padding: 8px 12px;
+}
+
+/* Preset items */
+.preset-item {
+    padding-left: 24px;
+}
