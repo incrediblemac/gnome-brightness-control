@@ -1,13 +1,11 @@
 // Brightness Control Extension for GNOME Shell
 // Multi-monitor software-based brightness control for external monitors on Wayland
-// Version 2.0 - Multi-monitor support for HDMI/Type-C/DisplayPort
 
 import GObject from 'gi://GObject';
 import St from 'gi://St';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Clutter from 'gi://Clutter';
-import Meta from 'gi://Meta';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
@@ -176,11 +174,12 @@ class GlobalBrightnessItem extends PopupMenu.PopupBaseMenuItem {
 
 const BrightnessIndicator = GObject.registerClass(
 class BrightnessIndicator extends PanelMenu.Button {
-    _init(settings, extensionPath) {
+    _init(extension) {
         super._init(0.0, 'Brightness Control');
 
-        this._settings = settings;
-        this._extensionPath = extensionPath;
+        this._extension = extension;
+        this._settings = extension.getSettings();
+        this._cancellable = new Gio.Cancellable();
         this._monitorItems = {};
         this._globalSliderItem = null;
         this._ddcBusMap = {};
@@ -276,35 +275,26 @@ class BrightnessIndicator extends PanelMenu.Button {
         // Build connector map using multiple detection methods
         let connectorMap = {};
 
-        // Method 1: Try reading from /sys/class/drm for connector names
+        // Method 1: Read connector names from /sys/class/drm
         try {
-            const [success, stdout] = GLib.spawn_command_line_sync('ls /sys/class/drm/');
-            if (success) {
-                const output = new TextDecoder().decode(stdout);
-                const drmCards = output.split('\n').filter(l => l.match(/^card\d+-/));
-
-                // Parse DRM connectors (e.g., card1-HDMI-A-1 -> HDMI-1)
-                for (const card of drmCards) {
-                    const match = card.match(/^card\d+-(.+)/);
-                    if (match) {
-                        const drmConnector = match[1];
-                        // Check if connected
-                        try {
-                            const [s, statusOut] = GLib.spawn_command_line_sync(
-                                `cat /sys/class/drm/${card}/status`
-                            );
-                            if (s && new TextDecoder().decode(statusOut).trim() === 'connected') {
-                                // Normalize: HDMI-A-1 -> HDMI-1, DP-1 -> DP-1
-                                const normalized = drmConnector.replace('-A-', '-').replace('-B-', '-');
-                                // Store with index -1 for now, we'll match by geometry
-                                connectorMap[normalized] = { drmName: drmConnector, connected: true };
-                            }
-                        } catch (e) {}
+            const drmDir = Gio.File.new_for_path('/sys/class/drm');
+            const iter = drmDir.enumerate_children('standard::name', Gio.FileQueryInfoFlags.NONE, null);
+            let info;
+            while ((info = iter.next_file(null)) !== null) {
+                const match = info.get_name().match(/^card\d+-(.+)/);
+                if (!match)
+                    continue;
+                try {
+                    const [ok, contents] = GLib.file_get_contents(`/sys/class/drm/${info.get_name()}/status`);
+                    if (ok && new TextDecoder().decode(contents).trim() === 'connected') {
+                        // Normalize: HDMI-A-1 -> HDMI-1, DP-1 -> DP-1
+                        connectorMap[this._normalizeConnector(match[1])] = {drmName: match[1], connected: true};
                     }
-                }
+                } catch (e) {}
             }
+            iter.close(null);
         } catch (e) {
-            log(`Brightness Control: DRM detection failed: ${e.message}`);
+            console.error(`Brightness Control: DRM detection failed: ${e.message}`);
         }
 
         // Method 2: Try deprecated display.get_monitor_connector if available
@@ -351,8 +341,6 @@ class BrightnessIndicator extends PanelMenu.Button {
         // Store detected monitors in settings
         const connectors = this._externalMonitors.map(m => m.connector);
         this._settings.set_string('detected-monitors', JSON.stringify(connectors));
-
-        log(`Brightness Control: Detected ${this._externalMonitors.length} monitors: ${connectors.join(', ')}`);
     }
 
     _getDisplayName(connector) {
@@ -373,53 +361,55 @@ class BrightnessIndicator extends PanelMenu.Button {
         this._ddcBusMap = {};
         this._ddcAvailableMap = {};
 
+        let proc;
         try {
-            const [success, stdout, stderr, status] = GLib.spawn_command_line_sync(
-                'ddcutil detect --brief'
-            );
+            proc = Gio.Subprocess.new(['ddcutil', 'detect', '--brief'],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE);
+        } catch (e) {
+            // ddcutil not installed: overlay mode only
+            return;
+        }
 
-            if (success && status === 0) {
-                const output = new TextDecoder().decode(stdout);
-                const lines = output.split('\n');
+        proc.communicate_utf8_async(null, this._cancellable, (p, res) => {
+            let stdout;
+            try {
+                [, stdout] = p.communicate_utf8_finish(res);
+            } catch (e) {
+                if (!e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                    console.error(`Brightness Control: DDC detection failed: ${e.message}`);
+                return;
+            }
+            if (!p.get_successful() || !stdout)
+                return;
 
-                let currentBus = null;
-                let currentConnector = null;
+            let currentBus = null;
+            let currentConnector = null;
+            for (const line of stdout.split('\n')) {
+                const busMatch = line.match(/I2C bus:\s+\/dev\/i2c-(\d+)/);
+                if (busMatch)
+                    currentBus = busMatch[1];
 
-                for (const line of lines) {
-                    // Match I2C bus line
-                    const busMatch = line.match(/I2C bus:\s+\/dev\/i2c-(\d+)/);
-                    if (busMatch) {
-                        currentBus = busMatch[1];
-                    }
+                const connectorMatch = line.match(/DRM connector:\s+card\d+-(.+)/);
+                if (connectorMatch)
+                    currentConnector = connectorMatch[1];
 
-                    // Match DRM connector line
-                    const connectorMatch = line.match(/DRM connector:\s+card\d+-(.+)/);
-                    if (connectorMatch) {
-                        currentConnector = connectorMatch[1];
-                    }
-
-                    // Check if this is a valid display (has VCP version)
-                    if (line.includes('VCP version') && currentBus && currentConnector) {
-                        // Normalize connector name (card1-HDMI-A-1 -> HDMI-1)
-                        const normalizedConnector = this._normalizeConnector(currentConnector);
-                        this._ddcBusMap[normalizedConnector] = currentBus;
-                        this._ddcAvailableMap[normalizedConnector] = true;
-                        log(`Brightness Control: DDC available for ${normalizedConnector} on bus ${currentBus}`);
-                    }
-
-                    // Reset on "Display" line (new display entry)
-                    if (line.match(/^Display \d+/) || line.match(/^Invalid display/)) {
-                        currentBus = null;
-                        currentConnector = null;
-                    }
+                // A valid display reports a VCP version
+                if (line.includes('VCP version') && currentBus && currentConnector) {
+                    const normalized = this._normalizeConnector(currentConnector);
+                    this._ddcBusMap[normalized] = currentBus;
+                    this._ddcAvailableMap[normalized] = true;
                 }
 
-                // Save DDC bus mappings
-                this._settings.set_string('monitor-ddc-bus', JSON.stringify(this._ddcBusMap));
+                if (line.match(/^Display \d+/) || line.match(/^Invalid display/)) {
+                    currentBus = null;
+                    currentConnector = null;
+                }
             }
-        } catch (e) {
-            log(`Brightness Control: DDC detection failed: ${e}`);
-        }
+
+            this._settings.set_string('monitor-ddc-bus', JSON.stringify(this._ddcBusMap));
+            this._rebuildMenu();
+            this._applyAllBrightness();
+        });
     }
 
     _normalizeConnector(connector) {
@@ -633,8 +623,6 @@ class BrightnessIndicator extends PanelMenu.Button {
         });
 
         _brightnessOverlays[monitor.connector] = overlay;
-
-        log(`Brightness Control: Overlay created for ${monitor.connector} at ${monitor.x},${monitor.y} size ${monitor.width}x${monitor.height}`);
     }
 
     _applyAllBrightness() {
@@ -687,13 +675,13 @@ class BrightnessIndicator extends PanelMenu.Button {
     _applyDDCBrightness(connector, level) {
         const bus = this._ddcBusMap[connector];
         if (!bus) {
-            log(`Brightness Control: No DDC bus for ${connector}, falling back to overlay`);
             this._applyOverlayBrightness(connector, level);
             return;
         }
 
         try {
-            GLib.spawn_command_line_async(`ddcutil --bus ${bus} setvcp 10 ${level}`);
+            Gio.Subprocess.new(['ddcutil', '--bus', String(bus), 'setvcp', '10', String(level)],
+                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE);
 
             // Hide overlay when using DDC
             const overlay = _brightnessOverlays[connector];
@@ -701,15 +689,13 @@ class BrightnessIndicator extends PanelMenu.Button {
                 overlay.style = 'background-color: rgba(0, 0, 0, 0);';
             }
         } catch (e) {
-            log(`Brightness Control: DDC failed for ${connector}: ${e}`);
+            console.error(`Brightness Control: DDC failed for ${connector}: ${e.message}`);
             this._ddcAvailableMap[connector] = false;
             this._applyOverlayBrightness(connector, level);
         }
     }
 
     _onMonitorsChanged() {
-        log('Brightness Control: Monitors changed, refreshing...');
-
         // Re-detect monitors
         this._detectMonitors();
         this._detectDDC();
@@ -805,14 +791,12 @@ class BrightnessIndicator extends PanelMenu.Button {
     }
 
     _openSettings() {
-        try {
-            GLib.spawn_command_line_async('gnome-extensions prefs brightness-control@local');
-        } catch (e) {
-            log(`Brightness Control: Error opening settings: ${e}`);
-        }
+        this._extension.openPreferences();
     }
 
     destroy() {
+        this._cancellable.cancel();
+
         // Disconnect settings
         for (const id of this._settingsConnections) {
             this._settings.disconnect(id);
@@ -840,8 +824,7 @@ class BrightnessIndicator extends PanelMenu.Button {
 
 export default class BrightnessControlExtension extends Extension {
     enable() {
-        this._settings = this.getSettings();
-        this._indicator = new BrightnessIndicator(this._settings, this.path);
+        this._indicator = new BrightnessIndicator(this);
         Main.panel.addToStatusArea('brightness-control', this._indicator);
     }
 

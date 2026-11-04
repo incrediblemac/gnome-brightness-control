@@ -1,0 +1,9 @@
+{
+  "name": "Brightness Control",
+  "description": "Per-monitor brightness control for external displays.\n\nUses DDC/CI hardware brightness when the monitor supports it (requires ddcutil), with a software dimming overlay as fallback.",
+  "uuid": "brightness-control@incrediblemac.github.io",
+  "shell-version": ["45", "46", "47", "48", "49", "50"],
+  "settings-schema": "org.gnome.shell.extensions.brightness-control",
+  "version-name": "7",
+  "url": "https://github.com/incrediblemac/gnome-brightness-control"
+}

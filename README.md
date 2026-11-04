@@ -56,13 +56,13 @@ git clone https://github.com/incrediblemac/brightnesscontrollerubuntu.git
 
 ```bash
 mkdir -p ~/.local/share/gnome-shell/extensions/
-cp -r brightnesscontrollerubuntu/brightness-control@local ~/.local/share/gnome-shell/extensions/
+cp -r gnome-brightness-control/brightness-control@incrediblemac.github.io ~/.local/share/gnome-shell/extensions/
 ```
 
 ### Step 3 — Compile the GSettings schema
 
 ```bash
-glib-compile-schemas ~/.local/share/gnome-shell/extensions/brightness-control@local/schemas/
+glib-compile-schemas ~/.local/share/gnome-shell/extensions/brightness-control@incrediblemac.github.io/schemas/
 ```
 
 ### Step 4 — Log out and log back in
@@ -72,7 +72,7 @@ On Wayland, GNOME Shell loads extensions at session start. A log out and log bac
 ### Step 5 — Enable the extension
 
 ```bash
-gnome-extensions enable brightness-control@local
+gnome-extensions enable brightness-control@incrediblemac.github.io
 ```
 
 Or open the **Extensions** app from the GNOME app grid and toggle **Brightness Control** on.
@@ -100,7 +100,7 @@ Log out and back in. The extension checks for DDC availability every 30 seconds 
 ## Settings
 
 ```bash
-gnome-extensions prefs brightness-control@local
+gnome-extensions prefs brightness-control@incrediblemac.github.io
 ```
 
 | Setting | Description | Default |
@@ -117,8 +117,8 @@ gnome-extensions prefs brightness-control@local
 ## Uninstall
 
 ```bash
-gnome-extensions disable brightness-control@local
-rm -rf ~/.local/share/gnome-shell/extensions/brightness-control@local
+gnome-extensions disable brightness-control@incrediblemac.github.io
+rm -rf ~/.local/share/gnome-shell/extensions/brightness-control@incrediblemac.github.io
 ```
 
 Log out and back in to complete removal.
@@ -152,7 +152,7 @@ dmesg | grep -i i2c
 **Extension crashes GNOME Shell:**
 Disable from a TTY (`Ctrl+Alt+F3`):
 ```bash
-gnome-extensions disable brightness-control@local
+gnome-extensions disable brightness-control@incrediblemac.github.io
 ```
 
 ---

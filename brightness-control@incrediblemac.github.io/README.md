@@ -57,13 +57,13 @@ This extension provides brightness control for external monitors when hardware D
 
 The extension is installed at:
 ```
-~/.local/share/gnome-shell/extensions/brightness-control@local/
+~/.local/share/gnome-shell/extensions/brightness-control@incrediblemac.github.io/
 ```
 
 ### Enable the Extension
 
 1. Log out and log back in (required for GNOME to detect new extensions on Wayland)
-2. Run: `gnome-extensions enable brightness-control@local`
+2. Run: `gnome-extensions enable brightness-control@incrediblemac.github.io`
 3. Or use the Extensions app
 
 ## Features
@@ -95,7 +95,7 @@ The extension is installed at:
 ## Files
 
 ```
-brightness-control@local/
+brightness-control@incrediblemac.github.io/
 ├── metadata.json      # Extension metadata
 ├── extension.js       # Main extension logic
 ├── prefs.js          # Settings/preferences UI
@@ -108,7 +108,7 @@ brightness-control@local/
 
 ## Settings
 
-Access via: `gnome-extensions prefs brightness-control@local`
+Access via: `gnome-extensions prefs brightness-control@incrediblemac.github.io`
 
 | Setting | Description | Default |
 |---------|-------------|---------|
@@ -195,7 +195,7 @@ dmesg | grep -i i2c
 ### Extension crashes GNOME Shell
 - Disable from TTY: `Ctrl+Alt+F3`, login, then:
   ```bash
-  gnome-extensions disable brightness-control@local
+  gnome-extensions disable brightness-control@incrediblemac.github.io
   ```
 - Check logs: `journalctl -b -g "brightness-control"`
 

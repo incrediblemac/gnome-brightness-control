@@ -1,5 +1,4 @@
 // Brightness Control Extension - Preferences
-// Version 2.0 - Multi-monitor support
 
 import Adw from 'gi://Adw';
 import Gtk from 'gi://Gtk';
@@ -260,7 +259,7 @@ export default class BrightnessControlPreferences extends ExtensionPreferences {
 
         const versionRow = new Adw.ActionRow({
             title: 'Version',
-            subtitle: '2.0'
+            subtitle: this.metadata['version-name'] ?? ''
         });
         aboutGroup.add(versionRow);
 
